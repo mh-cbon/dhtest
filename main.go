@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -59,34 +60,38 @@ func main() {
 				continue
 			}
 			err := d.MPutAll(put)
-			if err != nil {
-				fmt.Println("errs", err)
-				id, _ := dht.HexToBytes(put.Target)
-				ids := shitfID(id, 10)
-				var wg sync.WaitGroup
-				for _, id := range ids {
-					todoTarget := fmt.Sprintf("%x", id)
-					fmt.Printf("Performing lookup request for %v\n", todoTarget)
-					go func() {
-						defer wg.Done()
-						lookupErr := d.LookupStores(todoTarget, nil)
-						if lookupErr != nil {
-							log.Println(lookupErr)
-						}
-						err := d.MPutAll(put)
-						if err != nil {
-							log.Println(err)
-						}
-					}()
-				}
-				wg.Wait()
+			fmt.Println("errs", err)
+			id, _ := dht.HexToBytes(put.Target)
+			ids := shitfID(id, 10)
+			var wg sync.WaitGroup
+			wg.Add(len(ids))
+			for _, id := range ids {
+				todoTarget := fmt.Sprintf("%x", id)
+				fmt.Printf("Performing lookup request for %v\n", todoTarget)
+				go func() {
+					defer wg.Done()
+					lookupErr := d.LookupStores(todoTarget, nil)
+					if lookupErr != nil {
+						log.Println(lookupErr)
+					}
+					addrs, _ := d.ClosestStores(todoTarget, 8)
+					x := []*net.UDPAddr{}
+					for _, a := range addrs {
+						x = append(x, a.GetAddr())
+					}
+					err := d.MPutAll(put, x...)
+					if err != nil {
+						log.Println(err)
+					}
+				}()
 			}
+			wg.Wait()
 			<-time.After(time.Second * 10)
 		}
 		return nil
 	}
 
-	ln, err := utp.Listen("0.0.0.0:8000")
+	ln, err := utp.Listen("127.0.0.1:8000")
 	if err != nil {
 		panic(err)
 	}

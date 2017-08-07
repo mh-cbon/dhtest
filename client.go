@@ -60,6 +60,7 @@ func main() {
 				id, _ := dht.HexToBytes(target)
 				ids := shitfID(id, 10)
 				var wg sync.WaitGroup
+				wg.Add(len(ids))
 				for _, id := range ids {
 					todoTarget := fmt.Sprintf("%x", id)
 					fmt.Printf("Performing lookup request for %v\n", todoTarget)
@@ -69,7 +70,12 @@ func main() {
 						if lookupErr != nil {
 							log.Println(lookupErr)
 						}
-						v, err := d.MGetAll(todoTarget, pbk, 0, "salt")
+						addrs, _ := d.ClosestStores(todoTarget, 8)
+						x := []*net.UDPAddr{}
+						for _, a := range addrs {
+							x = append(x, a.GetAddr())
+						}
+						v, err := d.MGetAll(todoTarget, pbk, 0, "salt", x...)
 						if err != nil {
 							log.Println(err)
 						}
@@ -88,7 +94,7 @@ func main() {
 		return nil
 	}
 
-	ln, err := utp.Listen("0.0.0.0:8000")
+	ln, err := utp.Listen("127.0.0.1:8002")
 	if err != nil {
 		panic(err)
 	}
